@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import fcntl
+from contextlib import contextmanager
 import json
 import os
 import re
@@ -44,7 +46,7 @@ def timestamp(t):
 def git_head():
     try:
         return subprocess.check_output(
-            ["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"],
+            ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
             stderr=subprocess.DEVNULL, text=True, timeout=3,
         ).strip()
     except (subprocess.SubprocessError, FileNotFoundError):
@@ -64,6 +66,8 @@ def write_json_atomic(path, data):
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
             f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp, path)
     finally:
         if os.path.exists(tmp):
@@ -71,7 +75,7 @@ def write_json_atomic(path, data):
 
 
 def run_dir_for(run_id):
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+", run_id):
+    if run_id in (".", "..") or not re.fullmatch(r"[A-Za-z0-9_.-]+", run_id):
         raise ValueError("Invalid run id")
     return RUNS / run_id
 
@@ -93,71 +97,98 @@ def start(args):
     write_json_atomic(directory / "run.json", record)
     print(f"RUN_ID={run_id}")
     print(f"记录目录: {directory}")
-    print("本次导航结束后运行 finish；不要把还没测到的数值填为 0。")
+    print("自动执行将记录结果。" if getattr(args, "command", None) == "navigate" else "本次导航结束后运行 finish；不要把还没测到的数值填为 0。")
+    return record
+
+
+@contextmanager
+def ledger_lock():
+    SUMMARY.parent.mkdir(parents=True, exist_ok=True)
+    with (SUMMARY.parent / ".experiment.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+def checkpoint(run_id, extra):
+    with ledger_lock():
+        path = run_dir_for(run_id) / "run.json"
+        record = json.loads(path.read_text(encoding="utf-8"))
+        if record["state"] == "finished":
+            raise ValueError("Run already finished")
+        record.update(extra)
+        write_json_atomic(path, record)
+
+
+def sync_summary(record):
+    # Called under ledger_lock. Rewrite atomically so a crash cannot leave half a row.
+    rows = []
+    if SUMMARY.exists():
+        with SUMMARY.open(encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+            if reader.fieldnames and reader.fieldnames != FIELDS:
+                raise ValueError("summary.csv header differs from expected schema")
+    if any(r["run_id"] == record["run_id"] for r in rows):
+        return
+    row = {k: record.get(k) for k in FIELDS}
+    row["notes"] = "; ".join(filter(None, [record.get("notes_start"), record.get("notes_finish")]))
+    rows.append({k: "" if v is None else v for k, v in row.items()})
+    fd, tmp = tempfile.mkstemp(prefix=".summary-", dir=SUMMARY.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=FIELDS)
+            writer.writeheader()
+            writer.writerows(rows)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, SUMMARY)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def finalize(run_id, outcome, extra=None):
+    if outcome not in ("succeeded", "failed", "canceled"):
+        raise ValueError("Invalid outcome")
+    with ledger_lock():
+        path = run_dir_for(run_id) / "run.json"
+        record = json.loads(path.read_text(encoding="utf-8"))
+        if record["state"] != "finished":
+            record.update(extra or {})
+            t = now_utc()
+            started = datetime.fromisoformat(record["started_utc"].replace("Z", "+00:00"))
+            record.update(state="finished", outcome=outcome, finished_utc=timestamp(t))
+            record.setdefault("duration_wall_s", round((t - started).total_seconds(), 3))
+            for k in ("nav_time_sim_s", "remaining_distance_m", "recoveries", "collisions", "path_length_m", "gazebo_rtf"):
+                record.setdefault(k, None)
+            write_json_atomic(path, record)
+        # JSON is authoritative. Retry repairs a crash between JSON and CSV writes.
+        sync_summary(record)
+    print(f"结果已记录：{path}")
+    return record
 
 
 def finish(args):
-    directory = run_dir_for(args.run_id)
-    path = directory / "run.json"
-    if not path.is_file():
-        raise ValueError(f"Run not found: {args.run_id}")
+    import math
+    metrics = {}
+    for arg, field in (("nav_time_sim", "nav_time_sim_s"), ("remaining_distance", "remaining_distance_m"),
+                       ("path_length", "path_length_m"), ("gazebo_rtf", "gazebo_rtf"),
+                       ("recoveries", "recoveries"), ("collisions", "collisions")):
+        value = getattr(args, arg)
+        if value is not None and (not math.isfinite(value) or value < 0):
+            raise ValueError(f"{arg} must be finite and >=0")
+        if value is not None:
+            metrics[field] = value
+    metrics["notes_finish"] = args.notes or ""
+    finalize(args.run_id, args.outcome, metrics)
+
+
+def recover(args):
+    path = run_dir_for(args.run_id) / "run.json"
     record = json.loads(path.read_text(encoding="utf-8"))
-    if record.get("state") == "finished":
-        raise ValueError("Run already finished; not adding a duplicate summary row")
-    for key in ("nav_time_sim", "remaining_distance", "path_length", "gazebo_rtf"):
-        value = getattr(args, key)
-        if value is not None and value < 0:
-            raise ValueError(f"{key} must be >=0")
-    for key in ("recoveries", "collisions"):
-        value = getattr(args, key)
-        if value is not None and value < 0:
-            raise ValueError(f"{key} must be >=0")
-    t = now_utc()
-    start_time = datetime.fromisoformat(record["started_utc"].replace("Z", "+00:00"))
-    record.update({
-        "state": "finished", "outcome": args.outcome,
-        "finished_utc": timestamp(t),
-        "duration_wall_s": round((t - start_time).total_seconds(), 3),
-        "nav_time_sim_s": args.nav_time_sim,
-        "remaining_distance_m": args.remaining_distance,
-        "recoveries": args.recoveries,
-        "collisions": args.collisions,
-        "path_length_m": args.path_length,
-        "gazebo_rtf": args.gazebo_rtf,
-        "notes_finish": args.notes or "",
-    })
-    row = {
-        "run_id": record["run_id"], "goal_id": record["goal_id"],
-        "trial": record["trial"], "outcome": record["outcome"],
-        "started_utc": record["started_utc"], "finished_utc": record["finished_utc"],
-        "duration_wall_s": record["duration_wall_s"],
-        "nav_time_sim_s": record["nav_time_sim_s"],
-        "remaining_distance_m": record["remaining_distance_m"],
-        "recoveries": record["recoveries"], "collisions": record["collisions"],
-        "path_length_m": record["path_length_m"], "gazebo_rtf": record["gazebo_rtf"],
-        "git_commit": record["git_commit"], "launch_log": record["launch_log"],
-        "notes": "; ".join(filter(None, [record.get("notes_start"), record.get("notes_finish")]))
-    }
-    SUMMARY.parent.mkdir(parents=True, exist_ok=True)
-    with SUMMARY.open("a+", encoding="utf-8", newline="") as f:
-        f.seek(0)
-        reader = csv.DictReader(f)
-        if f.readable():
-            existing_rows = list(reader)
-            if reader.fieldnames and reader.fieldnames != FIELDS:
-                raise ValueError("summary.csv header differs from expected schema")
-            if any(x["run_id"] == record["run_id"] for x in existing_rows):
-                write_json_atomic(path, record)
-                print("结果已在 summary.csv 中；不会重复追加")
-                return
-        f.seek(0, 2)
-        writer = csv.DictWriter(f, fieldnames=FIELDS)
-        if f.tell() == 0:
-            writer.writeheader()
-        writer.writerow({k: "" if v is None else v for k, v in row.items()})
-    write_json_atomic(path, record)
-    print(f"结果已记录：{path}")
-    print(f"汇总已追加：{SUMMARY}")
+    if record.get("state") != "finished":
+        raise ValueError("Running records require explicit finish; never infer a terminal Action status")
+    finalize(args.run_id, record["outcome"])
 
 
 def list_runs(_args):
@@ -195,9 +226,18 @@ def main():
     p.set_defaults(func=finish)
     p = sub.add_parser("list", help="列出实验记录")
     p.set_defaults(func=list_runs)
+    p = sub.add_parser("navigate", help="执行一个真实 NavigateToPose 任务并自动记录")
+    from navigation_run import add_arguments, execute
+    add_arguments(p)
+    p.set_defaults(func=lambda args: execute(args, sys.modules[__name__]))
+    p = sub.add_parser("recover", help="从已结束 JSON 恢复缺失的汇总行")
+    p.add_argument("--run-id", required=True)
+    p.set_defaults(func=recover)
     args = parser.parse_args()
     try:
-        args.func(args)
+        result = args.func(args)
+        if isinstance(result, int):
+            sys.exit(result)
     except (ValueError, OSError, json.JSONDecodeError) as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
