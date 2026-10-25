@@ -26,10 +26,7 @@ __pycache__/
 # Windows download metadata
 *:Zone.Identifier
 
-/results/runs/
-
-# Local ledger synchronization lock
-/results/.experiment.lock
-
+# Per-run results stay local; commit documentation and the header-only template.
 /results/runs/
 /results/summary.csv
+/results/.experiment.lock
