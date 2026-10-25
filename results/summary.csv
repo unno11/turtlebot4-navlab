@@ -1,0 +1,1 @@
+run_id,goal_id,trial,outcome,started_utc,finished_utc,duration_wall_s,nav_time_sim_s,remaining_distance_m,recoveries,collisions,path_length_m,gazebo_rtf,git_commit,launch_log,notes

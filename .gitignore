@@ -25,3 +25,5 @@ __pycache__/
 
 # Windows download metadata
 *:Zone.Identifier
+
+/results/runs/
