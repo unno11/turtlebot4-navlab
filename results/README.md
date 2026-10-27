@@ -15,6 +15,40 @@
 
 工具会按需创建本地 JSON 和汇总文件，无需手工复制模板。Gazebo / ROS 启动日志由启动脚本保存在 `~/turtlebot4_ws/log/navlab/`；可用 `--launch-log` 关联，无需重复保存大型日志。
 
+## 跑完整个目标集
+
+批量脚本按 `config/navigation_goals.yaml` 的目标列表逐条执行。每跑完一次就把整套仿真重启一遍——这是必需的，因为固定起点依赖一次全新的出生和一次全新的 AMCL 初始化，同一次启动内连续发多个目标会让后续试次的起点不再是 S0。
+
+```bash
+cd ~/turtlebot4_ws/src/turtlebot4-navlab
+TRIALS=3 ./scripts/run_batch.sh
+```
+
+只查看调度、不实际运行：
+
+```bash
+PLAN=1 TRIALS=3 ./scripts/run_batch.sh
+```
+
+已有 `finished` 记录的试次会自动跳过，中断后重新执行同一条命令即可从断点继续。
+
+### 参考结果
+
+8 个目标各 3 次，共 24 次，全部成功：
+
+| 目标 | 类别 | 规划路径 | 平均导航耗时（仿真秒） |
+| --- | --- | --- | --- |
+| G01 | simple | 7.88 m | 43.3 |
+| G02 | simple | 7.57 m | 30.5 |
+| G03 | turning | 24.78 m | 128.4 |
+| G04 | turning | 24.23 m | 166.1 |
+| G05 | narrow | 26.31 m | 168.2 |
+| G06 | narrow | 8.28 m | 39.4 |
+| G07 | long | 42.57 m | 201.1 |
+| G08 | long | 39.82 m | 190.3 |
+
+导航耗时取自 Nav2 反馈的仿真时间，与墙钟无关；墙钟耗时见 `duration_wall_s`，受宿主机性能影响，不宜跨机器比较。
+
 ## 字段说明
 
 `summary.csv` 的列保持固定。JSON `null` 对应 CSV 空单元格，表示未知，不等于零。

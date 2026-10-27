@@ -5,8 +5,8 @@
 ## 从这里开始
 
 1. 按 [复现与启动指南](docs/reproduction.md) 检查环境并启动仿真。
-2. 在 RViz 设置初始位姿，发送第一个导航目标。
-3. 需要保存结果时，阅读 [实验记录说明](docs/experiment_logging.md)。
+2. 确认 AMCL 已在固定起点 `S0 = (0, 0, 0)` 完成定位，然后发送第一个导航目标。
+3. 需要保存结果时，阅读 [实验记录说明](docs/experiment_logging.md)；要了解目标集与难度判据，阅读 [目标集说明](docs/goal_set.md)。
 
 已配置过本项目的机器，可在 WSL 终端启动：
 
@@ -15,14 +15,15 @@ cd ~/turtlebot4_ws/src/turtlebot4-navlab
 ./scripts/start_navigation.sh
 ```
 
-等待 Gazebo 和 RViz 加载后，在 RViz 使用 **2D Pose Estimate** 完成定位，再使用 **Nav2 Goal** 选择地图中的空旷位置。初次使用请先阅读指南中的环境和传感器配置要求。
+等待 Gazebo、Nav2 和 RViz 加载完成（约 1–2 分钟）。起点由脚本与 `config/localization.yaml` 固定，**不需要也不应该使用 RViz 的 2D Pose Estimate**。之后可用 **Nav2 Goal** 手动选择目标，或用 `scripts/experiment_log.py navigate` 发送记录用的目标。初次使用请先阅读指南中的环境和传感器配置要求。
 
 ## 文档导航
 
 | 文档 | 适合什么时候阅读 |
 | --- | --- |
-| [复现与启动](docs/reproduction.md) | 第一次运行、确认环境、设置初始位姿、发送目标和退出仿真 |
-| [实验记录](docs/experiment_logging.md) | 自动记录一个目标任务，或手工登记 RViz 导航结果 |
+| [复现与启动](docs/reproduction.md) | 第一次运行、确认环境、确认初始定位、发送目标和退出仿真 |
+| [目标集与难度定义](docs/goal_set.md) | 了解 8 个导航目标、难度判据，以及如何用 Nav2 规划器复核 |
+| [实验记录](docs/experiment_logging.md) | 自动记录一个目标任务、结果分类规则、仿真速度门禁，或手工登记 RViz 导航结果 |
 | [结果目录](results/README.md) | 查看输出位置、字段含义与本地数据管理方式 |
 | [环境排障](docs/troubleshooting.md) | 出现图形、雷达、TF、控制器或 Python 构建问题时 |
 
@@ -42,7 +43,7 @@ cd ~/turtlebot4_ws/src/turtlebot4-navlab
 - [x] Keyboard teleoperation
 - [x] AMCL localization and Nav2 navigation
 - [x] Initial navigation goal reached
-- [ ] Reproducible baseline evaluation
+- [x] Reproducible baseline evaluation (8 goals x 3 trials, all succeeded)
 - [ ] Custom behavior tree plugins
 - [ ] Robust LiDAR perception
 - [ ] Dynamic obstacle avoidance experiments
@@ -52,7 +53,11 @@ cd ~/turtlebot4_ws/src/turtlebot4-navlab
 
 ## Baseline
 
-已验证单次导航到达。固定目标集、重复试验和正式统计协议尚未建立，因此不将单次到达作为统计基线。每次运行的数据仅保留在本地，不作为项目文档或版本库内容。
+固定起点 S0 与 8 个目标的难度分类已建立，并由 Nav2 规划器逐条复核（见 [目标集说明](docs/goal_set.md)）。结果分类规则与仿真速度门禁写在 [实验记录](docs/experiment_logging.md)。
+
+已完成 8 个目标 × 3 次重复试验，共 24 次，全部成功。复跑命令与结果表见 [结果目录](results/README.md)。
+
+每次运行的数据仅保留在本地，不作为项目文档或版本库内容。
 
 ## Upstream Projects
 

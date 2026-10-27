@@ -15,7 +15,9 @@
 
 ## 自动执行单个 NavigateToPose 任务
 
-先按 [启动指南](reproduction.md) 运行仿真，在 RViz 完成 **2D Pose Estimate** 并确认扫描与地图贴合。然后另开 WSL 终端：
+先按 [启动指南](reproduction.md) 启动仿真。一键脚本已经把 AMCL 的初始位姿固定在地图原点 `S0 = (0, 0, 0)`，所以**不要**在 RViz 里点 `2D Pose Estimate`——那会覆盖参数里的固定起点，使不同试验的起点不再一致，数据也就不可比了。
+
+启动完成后另开 WSL 终端：
 
 ```bash
 source /opt/ros/jazzy/setup.bash
@@ -64,6 +66,56 @@ read -r GOAL_X GOAL_Y GOAL_YAW
 
 超时使用现实时间，暂停仿真也可能触发超时。仿真时钟 topic 当前固定为 `/clock`。成功退出码为 0，其余为 1。
 
+## 结果分类与作废规则
+
+这三条规则必须在跑第一组数据**之前**写定，不能事后按结果归类，否则成功率失去意义。
+
+| 分类 | 判据 | 是否计入成功率 |
+| --- | --- | --- |
+| `succeeded` | Action 返回 SUCCEEDED（status 4） | 计入成功 |
+| `failed` | Action 返回 ABORTED（status 6），且本次 `rtf_estimate` ≥ 0.5 | 计入失败 |
+| `invalid_host` | 脚本因 `wall_timeout` 或数据流中断主动取消（status 5），与导航能力无关 | **不计入**，单独统计 |
+
+`invalid_host` 只允许用于**宿主资源不足**：RTF 低于门禁、内存耗尽、显示服务器断开。判据必须能在日志或指标里指出来，不能凭印象。
+
+作废的试验**不删除、不改编号**。`trial` 序号继续往后走，`notes` 按「现象；证据；结论」三段写，便于日后复查：
+
+```
+host_budget_exhausted; wall_timeout at rtf_estimate=0.19, remaining 1.06 m; not a navigation result
+```
+
+报告成功率时同时给出三个数：`succeeded` / `failed` / `invalid_host`，分母只含前两者。
+
+## 仿真速度门禁（RTF）
+
+RTF = 仿真时间推进速度 ÷ 现实时间。RTF 过低会提前触发墙钟超时，也会让 `cmd_vel` 时间戳过期被底盘丢弃，直接污染数据。
+
+每次试验前测一次：
+
+```bash
+ros2 topic echo --once /clock --field clock.sec
+sleep 10
+ros2 topic echo --once /clock --field clock.sec
+```
+
+两个读数之差 ÷ 10 就是 RTF。
+
+| RTF | 处理 |
+| --- | --- |
+| ≥ 0.7 | 正常，`--timeout` 用 300 |
+| 0.5–0.7 | 可用，`--timeout` 提到 600，并在这批数据里记录 RTF |
+| < 0.5 | **不跑试验**，先降负载（见下） |
+
+降低 RTF 的手段，按收益排序：关闭 Gazebo 的射线可视化（一键脚本已设 `visualize_rays:=false`，它把雷达的每条射线每帧重画一遍，对物理和导航没有贡献）、关闭 RViz、确认 Gazebo 在使用 GPU 而非软件渲染。
+
+`summary.csv` 的 `gazebo_rtf` 保持空值——它没有可靠的自动来源。需要参考值时用下面的估算，并明确标注是估算：
+
+```
+rtf_estimate = nav_time_sim_s / duration_wall_s
+```
+
+分母包含等待接受和取消宽限，因此略低于真实 RTF。它只用于判断该次作业是否作废，不要写进性能对比。
+
 ## 在 RViz 导航时手工登记
 
 发送目标前创建记录：
@@ -98,8 +150,9 @@ head -n 5 results/summary.csv
 
 - 反馈可能早于最终状态，因此剩余距离和导航耗时是最后收到的样本。
 - 路径来自里程计，不是 Gazebo Ground Truth；丢包、漂移和位置跳变会影响估计。
-- 碰撞次数和 Gazebo RTF 没有可靠数据源，保持 JSON `null`、CSV 空值。
-- 超时或数据流中断属于实验失败，不能据此断定 Action 返回 aborted，或 Gazebo 已崩溃。
+- 路径长度只有和 Nav2 规划的路线长度对比才有意义。明显超出（例如 +30% 以上）说明发生了绕行或恢复行为，不能直接当作"走了多远"。
+- 碰撞次数和 Gazebo RTF 没有可靠数据源，保持 JSON `null`、CSV 空值；RTF 参考值按上一节 `rtf_estimate` 估算，不进 CSV。
+- 超时或数据流中断属于实验失败，不能据此断定 Action 返回 aborted，或 Gazebo 已崩溃。RTF 充足时出现 status 5 也要先查原因，不要默认归为宿主问题。
 
 ## 取消与中断恢复
 

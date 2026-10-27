@@ -2,7 +2,7 @@
 
 本指南介绍在已有 ROS 2 Jazzy 和 TurtleBot 4 Simulator 的环境中，启动 warehouse 仿真并完成一次导航。无需为了运行本项目重新安装 ROS、重建工作空间或修改导航算法。
 
-[返回首页](../README.md) · [实验记录](experiment_logging.md) · [环境排障](troubleshooting.md)
+[返回首页](../README.md) · [目标集](goal_set.md) · [实验记录](experiment_logging.md) · [环境排障](troubleshooting.md)
 
 ## 环境要求
 
@@ -58,16 +58,22 @@ cd ~/turtlebot4_ws/src/turtlebot4-navlab
 
 终端会显示启动日志路径，默认保存在 `~/turtlebot4_ws/log/navlab/`，不进入项目版本库。保持终端 A 运行。
 
-## 2. 设置机器人初始位姿
+## 2. 确认初始定位
 
-在 RViz 中：
+起点是固定的，不需要手工设置。一键脚本通过 `config/localization.yaml` 把 AMCL 的初始位姿设为地图原点 `S0 = (0, 0, 0)`，同时把 Gazebo 的出生位姿固定在世界原点，两者一致。
 
-1. 找到地图上与 Gazebo 机器人对应的位置。
-2. 点击 **2D Pose Estimate**。
-3. 在该位置按住鼠标并拖动，箭头方向应与机器人朝向一致。
-4. 等待激光扫描与地图墙壁、货架等轮廓基本贴合。
+**不要使用 RViz 的 2D Pose Estimate。** 它会覆盖参数里的固定起点，使该次运行与其它运行不可比。那个工具只适合临时调试，不属于本流程。
 
-这一步告诉 AMCL 机器人在地图中的初始位置，不会把机器人移动到点击的位置。每次重新启动仿真后，都需要确认定位。
+另开终端 B 验证定位已建立：
+
+```bash
+source /opt/ros/jazzy/setup.bash
+ros2 run tf2_ros tf2_echo map base_link
+```
+
+应持续输出 `Translation: [0.000, 0.000, 0.000]`、`RPY: [0, -0, 0]`，按 `Ctrl+C` 结束。
+
+这个数字是初始猜测自动生效的结果，**不代表定位精度已经被验证**：机器人没有移动时 AMCL 不做观测更新，位姿就停在种子上。定位是否与地图一致，要看 RViz 里 LaserScan 与地图墙体的贴合程度。起点数值的来源和验证方法见 `config/navigation_goals.yaml` 的文件头注释。
 
 ## 3. 发送第一个导航目标
 
@@ -88,7 +94,7 @@ cd ~/turtlebot4_ws/src/turtlebot4-navlab
 
 有任务正在执行时，先取消目标；若使用 `navigate`，可在它的终端按 `Ctrl+C` 请求取消并等待记录结束。随后在终端 A 按 `Ctrl+C` 退出整套仿真。
 
-下一次运行重复“启动 → 初始定位 → 发目标”即可，不需要每次重新构建或重新应用补丁。
+下一次运行重复"启动 → 验证定位 → 发目标"即可，没有手工定位步骤，也不需要每次重新构建或重新应用补丁。
 
 ## 无法导航时先检查什么
 
@@ -105,6 +111,6 @@ ros2 control list_controllers -c /controller_manager
 ros2 run tf2_ros tf2_echo map base_link
 ```
 
-AMCL 和 bt_navigator 应为 active，驱动控制器应已启动。`tf2_echo` 会持续输出，可按 `Ctrl+C` 结束；若定位尚未完成，先返回初始位姿步骤。
+AMCL 和 bt_navigator 应为 active，驱动控制器应已启动。`tf2_echo` 会持续输出，可按 `Ctrl+C` 结束；若 `map` 坐标系始终不存在，说明 AMCL 没有拿到初始位姿，先回到第 2 节核对 `config/localization.yaml`。
 
 TF 的主要关系是 `map → odom → base_link`：AMCL 提供地图定位关系，里程计提供机器人相对运动。图形、雷达、Transport、控制器或 Python 问题的进一步排查见 [环境排障](troubleshooting.md)。
