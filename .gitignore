@@ -30,3 +30,6 @@ __pycache__/
 /results/runs/
 /results/summary.csv
 /results/.experiment.lock
+
+# Batch runner logs are raw run data, same rule as runs/ and summary.csv.
+/results/batch_*.log
