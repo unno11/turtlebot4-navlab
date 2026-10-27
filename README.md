@@ -23,6 +23,7 @@ cd ~/turtlebot4_ws/src/turtlebot4-navlab
 | --- | --- |
 | [复现与启动](docs/reproduction.md) | 第一次运行、确认环境、确认初始定位、发送目标和退出仿真 |
 | [目标集与难度定义](docs/goal_set.md) | 了解 8 个导航目标、难度判据，以及如何用 Nav2 规划器复核 |
+| [官方基线结果](docs/baseline.md) | 查看基线的场景条件、结果表、指标口径与复跑方式 |
 | [实验记录](docs/experiment_logging.md) | 自动记录一个目标任务、结果分类规则、仿真速度门禁，或手工登记 RViz 导航结果 |
 | [结果目录](results/README.md) | 查看输出位置、字段含义与本地数据管理方式 |
 | [环境排障](docs/troubleshooting.md) | 出现图形、雷达、TF、控制器或 Python 构建问题时 |
@@ -53,11 +54,11 @@ cd ~/turtlebot4_ws/src/turtlebot4-navlab
 
 ## Baseline
 
-固定起点 S0 与 8 个目标的难度分类已建立，并由 Nav2 规划器逐条复核（见 [目标集说明](docs/goal_set.md)）。结果分类规则与仿真速度门禁写在 [实验记录](docs/experiment_logging.md)。
+官方基线的完整结果见 [官方基线结果](docs/baseline.md)：8 个目标各 3 次，共 24 次，全部成功，并给出每个目标的导航耗时与恢复次数。
 
-已完成 8 个目标 × 3 次重复试验，共 24 次，全部成功。复跑命令与结果表见 [结果目录](results/README.md)。
+起点固定 S0、目标集难度由 Nav2 规划器逐条复核（见 [目标集说明](docs/goal_set.md)）；结果分类规则与仿真速度门禁写在 [实验记录](docs/experiment_logging.md)。
 
-每次运行的数据仅保留在本地，不作为项目文档或版本库内容。
+每次运行的原始数据仅保留在本地，不作为项目文档或版本库内容。
 
 ## Upstream Projects
 
