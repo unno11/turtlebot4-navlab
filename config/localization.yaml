@@ -1,0 +1,82 @@
+# TurtleBot4 NavLab - localization parameters (amcl + map_server)
+#
+# Baseline source:
+#   /opt/ros/jazzy/share/turtlebot4_navigation/config/localization.yaml
+# This file is a FULL REPLACEMENT of that file (passed via `params:=`), so every
+# original key must stay here -- otherwise amcl silently loses its configuration.
+#
+# NavLab-only additions (search for "NavLab"):
+#   set_initial_pose / always_reset_initial_pose / initial_pose
+#
+# Why: upstream ships no initial pose, so amcl waits forever for an /initialpose
+# message (the RViz "2D Pose Estimate" click). With no pose it never publishes
+# map -> odom, and Nav2 reports "map frame does not exist". Supplying S0 here makes
+# localization deterministic and removes the manual click from every run.
+
+amcl:
+  ros__parameters:
+    alpha1: 0.2
+    alpha2: 0.2
+    alpha3: 0.2
+    alpha4: 0.2
+    alpha5: 0.2
+    base_frame_id: "base_link"
+    beam_skip_distance: 0.5
+    beam_skip_error_threshold: 0.9
+    beam_skip_threshold: 0.3
+    do_beamskip: false
+    global_frame_id: "map"
+    lambda_short: 0.1
+    laser_likelihood_max_dist: 2.0
+    laser_max_range: 100.0
+    laser_min_range: -1.0
+    laser_model_type: "likelihood_field"
+    max_beams: 60
+    max_particles: 2000
+    min_particles: 500
+    odom_frame_id: "odom"
+    pf_err: 0.05
+    pf_z: 0.99
+    recovery_alpha_fast: 0.0
+    recovery_alpha_slow: 0.0
+    resample_interval: 1
+    robot_model_type: "nav2_amcl::DifferentialMotionModel"
+    save_pose_rate: 0.5
+    sigma_hit: 0.2
+    tf_broadcast: true
+    transform_tolerance: 1.0
+    update_min_a: 0.2
+    update_min_d: 0.25
+    z_hit: 0.5
+    z_max: 0.05
+    z_rand: 0.5
+    z_short: 0.05
+    scan_topic: scan
+
+    # ---- NavLab: fixed start pose S0 (map frame) ----
+    # S0 = map (0.0, 0.0, yaw 0.0). Verified by fitting one /scan frame against
+    # warehouse.pgm through the full kinematic chain
+    #   map <- base_link <- shell_link (no rotation) <- rplidar_link (xyz -0.04,0,0.0987, rpy 0,0,pi/2)
+    # using a Euclidean distance transform of the occupancy grid, 86 rays:
+    #   (0.000, 0.000,   0.0 deg) -> mean residual 0.012 m   <-- adopted
+    #   (0.000, 0.000, +90.0 deg) -> 1.708 m
+    #   (0.000, 0.000, -90.0 deg) -> 1.098 m
+    #   (0.000, 0.000,+180.0 deg) -> 3.178 m
+    #   (-0.094,-0.122,-178.88deg, the old hand-clicked value) -> 3.142 m
+    # So the map frame is axis-aligned with the Gazebo world frame, and the robot
+    # spawns at world (0,0) facing +x. Re-measure before ever changing these numbers.
+    # Do NOT also click "2D Pose Estimate" in RViz: that overwrites this value.
+    set_initial_pose: true
+    always_reset_initial_pose: false
+    initial_pose:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      yaw: 0.0
+
+map_saver:
+  ros__parameters:
+    save_map_timeout: 5.0
+    free_thresh_default: 0.25
+    occupied_thresh_default: 0.65
+    map_subscribe_transient_local: true

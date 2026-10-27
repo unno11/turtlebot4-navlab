@@ -1,0 +1,146 @@
+# TurtleBot 4 NavLab - warehouse scenario navigation goals
+#
+# frame : map
+# world : warehouse (Gazebo)
+# units : metres, radians
+#
+# ---------------------------------------------------------------------------
+# Start pose S0 = map (0, 0, 0)
+#
+# Measured, not hand-clicked. One /scan frame was fitted against warehouse.pgm
+# through the full kinematic chain
+#   map <- base_link <- shell_link (no rotation)
+#        <- rplidar_link (xyz -0.04 0 0.0987, rpy 0 0 pi/2)
+# using a Euclidean distance transform of the occupancy grid, 86 rays:
+#   (0.000, 0.000,   0.0 deg) -> mean residual 0.012 m   <- adopted
+#   (0.000, 0.000, +90.0 deg) -> 1.708 m
+#   (0.000, 0.000,-180.0 deg) -> 3.178 m
+#   (-0.094,-0.122,-178.9 deg, the old hand-clicked value) -> 3.142 m
+# So the map frame is axis-aligned with the Gazebo world frame and the robot
+# spawns at world (0,0) facing +x. The matching AMCL seed lives in
+# config/localization.yaml (set_initial_pose + initial_pose).
+# ---------------------------------------------------------------------------
+# Goals
+#
+# Every goal below was accepted by Nav2's own planner via scripts/check_paths.py
+# (action /compute_path_to_pose, planning only -- the robot never moved).
+# The `measures` block holds what that run reported; the difficulty categories
+# rest on these numbers, NOT on the goal coordinates:
+#
+#   simple    low turn rate, short route            (G01, G02)
+#   turning   >= 6 deg/m at ~24 m route length      (G03, G04)
+#   narrow    bottleneck 0.55 m -- the only such pair in the set (G05, G06)
+#   long      >= 39 m route length                  (G07, G08)
+#
+# Goal yaw is the ARRIVAL heading of Nav2's own planned path, so the robot does
+# not perform an unmeasured in-place rotation at the goal.
+#
+# Two controlled pairs to reuse in the analysis:
+#   G01 vs G06 : same length (~8 m); turn 3 vs 117 deg; bottleneck 1.20 vs 0.55 m
+#                -> isolates how much difficulty comes from turning/clearance
+#                   rather than distance
+#   G03 vs G07 : same turn density (~11-12 deg/m); length 24.8 vs 42.6 m
+#                -> isolates accumulated-distance effects (localization drift,
+#                   recovery count) from route complexity
+#
+# Do not edit coordinates without re-running scripts/check_paths.py and updating
+# `measures` -- a stale measures block makes the category label meaningless.
+# ---------------------------------------------------------------------------
+
+map_frame: map
+world: warehouse
+
+start:
+  id: S0
+  x: 0.0
+  y: 0.0
+  yaw: 0.0
+
+goals:
+  G01:
+    category: simple
+    x: 5.735
+    y: 5.375
+    yaw: 0.734
+    measures:
+      path_len_m: 7.88
+      turn_deg: 3
+      turn_rate_deg_per_m: 0.4
+      bottleneck_m: 1.20
+
+  G02:
+    category: simple
+    x: -6.145
+    y: 4.385
+    yaw: 2.557
+    measures:
+      path_len_m: 7.57
+      turn_deg: 10
+      turn_rate_deg_per_m: 1.3
+      bottleneck_m: 1.20
+
+  G03:
+    category: turning
+    x: 9.695
+    y: 16.265
+    yaw: 2.159
+    measures:
+      path_len_m: 24.78
+      turn_deg: 296
+      turn_rate_deg_per_m: 12.0
+      bottleneck_m: 1.00
+
+  G04:
+    category: turning
+    x: 12.665
+    y: -18.385
+    yaw: -1.000
+    measures:
+      path_len_m: 24.23
+      turn_deg: 155
+      turn_rate_deg_per_m: 6.4
+      bottleneck_m: 1.20
+
+  G05:
+    category: narrow
+    x: 7.715
+    y: -21.355
+    yaw: -1.726
+    measures:
+      path_len_m: 26.31
+      turn_deg: 201
+      turn_rate_deg_per_m: 7.6
+      bottleneck_m: 0.55
+
+  G06:
+    category: narrow
+    x: -8.125
+    y: -0.565
+    yaw: 2.713
+    measures:
+      path_len_m: 8.28
+      turn_deg: 117
+      turn_rate_deg_per_m: 14.1
+      bottleneck_m: 0.55
+
+  G07:
+    category: long
+    x: -5.155
+    y: 23.195
+    yaw: -2.704
+    measures:
+      path_len_m: 42.57
+      turn_deg: 462
+      turn_rate_deg_per_m: 10.9
+      bottleneck_m: 1.00
+
+  G08:
+    category: long
+    x: -2.185
+    y: 24.185
+    yaw: 2.924
+    measures:
+      path_len_m: 39.82
+      turn_deg: 369
+      turn_rate_deg_per_m: 9.3
+      bottleneck_m: 0.90
