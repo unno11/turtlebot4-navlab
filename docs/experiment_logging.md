@@ -73,10 +73,15 @@ read -r GOAL_X GOAL_Y GOAL_YAW
 | 分类 | 判据 | 是否计入成功率 |
 | --- | --- | --- |
 | `succeeded` | Action 返回 SUCCEEDED（status 4） | 计入成功 |
-| `failed` | Action 返回 ABORTED（status 6），且本次 `rtf_estimate` ≥ 0.5 | 计入失败 |
-| `invalid_host` | 脚本因 `wall_timeout` 或数据流中断主动取消（status 5），与导航能力无关 | **不计入**，单独统计 |
+| `failed` | Action 返回 ABORTED（status 6） | 计入失败 |
+| `invalid` | 记录存在但没有形成导航结果：`termination_reason` 不是 `action_result`（墙钟超时、数据流中断、ROS 上下文丢失），或 `action_status` 不是 4/6 | **不计入**，单独统计 |
+| `unfinished` | 记录器没有收尾（`state` 不是 `finished`） | 不计入，可重跑 |
 
-`invalid_host` 只允许用于**宿主资源不足**：RTF 低于门禁、内存耗尽、显示服务器断开。判据必须能在日志或指标里指出来，不能凭印象。
+判据只看**动作有没有返回最终状态**，不看 RTF。这套规则的实现集中在 `scripts/run_record.py`，汇总脚本（`summarize_results.py`、`compare_arms.py`）与批量脚本（`run_batch.sh` 的 `already_done`）共用同一份判定 —— 早先两边各自判断，导致汇总认为"无效"的记录被批量脚本当成"已完成"而跳过。
+
+早期版本把 `failed` 写成"ABORTED 且 `rtf_estimate` ≥ 0.5"，那是把宿主速度和导航结果混在一起。RTF 低会让墙钟超时和 `cmd_vel` 时间戳过期更容易发生，但它不决定**动作最终是失败，还是被工具打断**。需要区分的是终止原因，不是速度。
+
+`invalid` 只允许用于**与导航能力无关的终止**：墙钟超时、仿真时钟或里程计停更、挂钟与仿真时钟不一致导致的中断。判据必须能在日志或指标里指出来，不能凭印象。
 
 作废的试验**不删除、不改编号**。`trial` 序号继续往后走，`notes` 按「现象；证据；结论」三段写，便于日后复查：
 
@@ -105,6 +110,17 @@ ros2 topic echo --once /clock --field clock.sec
 | ≥ 0.7 | 正常，`--timeout` 用 300 |
 | 0.5–0.7 | 可用，`--timeout` 提到 600，并在这批数据里记录 RTF |
 | < 0.5 | **不跑试验**，先降负载（见下） |
+
+### 已记录批次没有满足这条门禁
+
+基线批次与控制器对比批次的 `rtf_estimate` 实测为 **0.19–0.30**，全部落在"不跑试验"区间。这些数据保留下来了，但代价必须一起写明，否则数字会显得比实际更干净：
+
+- **不受影响**：`nav_time_sim_s`、剩余距离、恢复次数都取自仿真时间与 Nav2 反馈，与墙钟无关，仍可用于同批次内的横向比较。
+- **受影响**：墙钟耗时不可跨批次或跨机器比较。低 RTF 下 diffdrive 会丢弃过期速度指令，同一台机器上 G05 的三次运行分别出现 **41 / 36 / 82** 条 `Ignoring the received message ... older than` 告警，说明有部分 `cmd_vel` 没有生效。
+- **因此不能下的结论**：把"某个控制器在窄通道下失败"归因于控制律。RPP 与 Graceful 在 G05 都中止，但这些运行同时存在大量指令丢弃，两者在现有证据下无法区分，见 [局部控制器对比](controller_comparison.md)。
+- **要消除这个疑点**：在 RTF ≥ 0.5 的宿主上重跑，或对每个目标做多次重复，让宿主抖动被平均掉。
+
+`summarize_results.py` 会在表尾打印实际记录的 RTF 范围，避免这个前提被忘掉。
 
 降低 RTF 的手段，按收益排序：关闭 Gazebo 的射线可视化（一键脚本已设 `visualize_rays:=false`，它把雷达的每条射线每帧重画一遍，对物理和导航没有贡献）、关闭 RViz、确认 Gazebo 在使用 GPU 而非软件渲染。
 
