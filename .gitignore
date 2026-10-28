@@ -31,5 +31,9 @@ __pycache__/
 /results/summary.csv
 /results/.experiment.lock
 
+# Superseded batches are moved here rather than deleted, so the numbers behind an
+# older result set can still be regenerated. Raw records either way - stay local.
+/results/archive/
+
 # Batch runner logs are raw run data, same rule as runs/ and summary.csv.
 /results/batch_*.log
