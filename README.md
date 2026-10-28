@@ -2,6 +2,8 @@
 
 ROS 2 Jazzy · Gazebo Harmonic · TurtleBot 4 · Nav2
 
+[![CI](https://github.com/unno11/turtlebot4-navlab/actions/workflows/ci.yml/badge.svg)](https://github.com/unno11/turtlebot4-navlab/actions/workflows/ci.yml)
+
 基于官方 warehouse 场景的移动机器人导航基线：固定起点、8 个经规划器复核的目标、24 次重复试验。目的是得到可重复的量化结果，而不是单次演示。
 
 ![NavLab 导航演示](docs/media/navlab-demo.gif)
@@ -19,7 +21,7 @@ ROS 2 Jazzy · Gazebo Harmonic · TurtleBot 4 · Nav2
 | 成功率 | 24 / 24 |
 | 单次导航耗时 | 29–205 s（仿真时间） |
 
-指标定义与逐目标结果见 [官方基线结果](docs/baseline.md)。
+指标定义与逐目标结果见 [官方基线结果](docs/baseline.md)。同一批目标上只替换局部控制器的对比结果见 [局部控制器对比](docs/controller_comparison.md)。
 
 ## 快速开始
 
@@ -61,6 +63,7 @@ TRIALS=3 ./scripts/run_batch.sh                  # 8 个目标 x 3 次，逐个�
 | [复现与启动](docs/reproduction.md) | 首次运行、环境检查、确认初始定位、发送目标、退出仿真 |
 | [目标集与难度定义](docs/goal_set.md) | 8 个导航目标、难度判据与复核方法 |
 | [官方基线结果](docs/baseline.md) | 基线条件、结果表、指标口径与复跑方式 |
+| [局部控制器对比](docs/controller_comparison.md) | MPPI / RPP / Graceful 在同一批目标上的对比与结论 |
 | [实验记录](docs/experiment_logging.md) | 自动记录流程、结果分类规则、仿真速度门禁 |
 | [结果目录](results/README.md) | 输出位置、字段含义与本地数据管理 |
 | [环境排障](docs/troubleshooting.md) | 图形、雷达、TF、控制器或构建问题 |
