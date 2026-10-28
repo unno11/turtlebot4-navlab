@@ -34,7 +34,7 @@ TRIALS=3 ./scripts/run_batch.sh                  # 8 个目标 x 3 次，逐个�
 
 环境要求见 [复现与启动指南](docs/reproduction.md)。起点由 `config/localization.yaml` 固定，无需使用 RViz 的 2D Pose Estimate。
 
-## 三个关键实现决策
+## 四个关键实现决策
 
 ### 起点位置的确定
 
@@ -55,6 +55,14 @@ TRIALS=3 ./scripts/run_batch.sh                  # 8 个目标 x 3 次，逐个�
 每次试验之间重启整套仿真，使 Gazebo 的出生位姿与 AMCL 的初始位姿回到同一状态，起点才真的是同一个起点。批量流程由 `scripts/run_batch.sh` 完成：逐条启动、等待 Nav2 就绪、执行环境自检、发送目标、记录结果、关闭仿真，再进入下一条；中断后重跑会跳过已完成的试验。
 
 统计口径同样固定：被墙钟超时打断的记录不构成导航结果，不计入失败统计，规则见 [实验记录](docs/experiment_logging.md)。
+
+### 控制器怎么选
+
+官方默认的 MPPI 在 24 次基线试验里全部成功，这本身说明不了它是否适合这个场景 —— 全成功的测试集没有区分度。于是把局部控制器换成三个（MPPI / RPP / Graceful），其余条件完全不动，只替换 `controller_server` 的 `FollowPath` 插件，三份参数文件经解析后逐字段比对，确认只有这一块不同。
+
+结果只有 **MPPI 能通过 G05 的 0.55 m 窄通道**，RPP 与 Graceful 都在中途放弃（RPP 净前进约 2 m，Graceful 约 8 m）；但在转弯路线 G04 上 **Graceful 比 MPPI 快 21%、恢复次数少 37%**；简单目标三者没有差别。共同目标上 Graceful 平均最省时，MPPI 与 RPP 几乎持平。
+
+差异只在特定场景出现，不存在"某个控制器全面更好"。完整数据、参数前提与局限（单次试验、RPP 与 Graceful 未调参）见 [局部控制器对比](docs/controller_comparison.md)。
 
 ## 文档
 
