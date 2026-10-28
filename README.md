@@ -1,21 +1,49 @@
 # TurtleBot 4 NavLab
 
-基于 ROS 2 Jazzy、Gazebo Harmonic 和 TurtleBot 4 的室内移动机器人导航项目。使用官方 warehouse 场景，支持 AMCL 定位、Nav2 导航，以及单目标任务的自动结果记录。
+ROS 2 Jazzy · Gazebo Harmonic · TurtleBot 4 · Nav2
 
-## 从这里开始
+在官方 warehouse 场景里，用固定的起点、固定的 8 个目标、可重复的批量流程，把 Nav2 的导航表现量化下来 —— 不是"跑通了一次导航"，而是 24 次重复试验、24 次成功、每次都能从零复现。
 
-1. 按 [复现与启动指南](docs/reproduction.md) 检查环境并启动仿真。
-2. 确认 AMCL 已在固定起点 `S0 = (0, 0, 0)` 完成定位，然后发送第一个导航目标。
-3. 需要保存结果时，阅读 [实验记录说明](docs/experiment_logging.md)；要了解目标集与难度判据，阅读 [目标集说明](docs/goal_set.md)。
+![NavLab 导航演示](docs/media/navlab-demo.gif)
 
-已配置过本项目的机器，可在 WSL 终端启动：
+*RViz 中的一次导航过程（约 6 分钟实时，24 倍速压缩）。红色是 Nav2 规划的全局路径，左下角是实时状态：剩余距离、已用时间、恢复次数。*
+
+**结果一览**：8 个目标 × 3 次 = 24 次，成功率 100%，单次导航 29–205 s（仿真时间）。完整的指标定义与逐目标结果见 [官方基线结果](docs/baseline.md)。
+
+**30 秒复现**：
 
 ```bash
 cd ~/turtlebot4_ws/src/turtlebot4-navlab
-./scripts/start_navigation.sh
+./scripts/start_navigation.sh                    # Gazebo + Nav2 + AMCL，起点自动固定为 S0
+TRIALS=3 ./scripts/run_batch.sh                  # 8 个目标 x 3 次，逐步重启、自检、记录
+/usr/bin/python3 scripts/summarize_results.py    # 生成结果表
 ```
 
-等待 Gazebo、Nav2 和 RViz 加载完成（约 1–2 分钟）。起点由脚本与 `config/localization.yaml` 固定，**不需要也不应该使用 RViz 的 2D Pose Estimate**。之后可用 **Nav2 Goal** 手动选择目标，或用 `scripts/experiment_log.py navigate` 发送记录用的目标。初次使用请先阅读指南中的环境和传感器配置要求。
+起点由启动脚本与 `config/localization.yaml` 固定，**不需要也不应该使用 RViz 的 2D Pose Estimate**。初次运行的环境要求见 [复现与启动指南](docs/reproduction.md)。
+
+## 三个具体问题
+
+这个项目不只是把官方仿真跑起来。中间有三处必须自己判断的地方，也是我认为最值得看的部分。
+
+**1. 起点到底在哪？**
+
+官方启动脚本把机器人放在 Gazebo 世界原点，而 Nav2 需要的是 `map` 坐标系下的起点。早先用手在 RViz 里拖 2D Pose Estimate，得到 `(-0.094, -0.122, -3.122)` —— 既不可复现，也无法判断对错。
+
+改用可验证的方法：取一帧 `/scan`，沿 URDF 链条（`base_link → shell_link → rplidar_link`）变换到车体系，再与 `warehouse.pgm` 的距离变换做拟合。`(0, 0, 0)` 的平均残差是 **0.012 m**，而手拖的那个值残差是 **3.14 m** —— 差了将近一个车身，yaw 也整整反了 180°。
+
+现在起点写在 `config/localization.yaml` 的 `initial_pose` 里，每次启动自动注入 AMCL，全程无需手工操作。
+
+**2. 目标该有多难？**
+
+凭坐标"看起来远"不等于路线难。8 个目标全部用 Nav2 的规划器实际规划一遍，记录路径长度、累计转角、转角密度和最窄处宽度，再按这些数字分成 simple / turning / narrow / long 四类，而不是按目标坐标拍脑袋。
+
+这套判据固化在 `scripts/check_paths.py` 里：每次跑实验之前先自检，任何一项偏离基线就拒绝开始，避免环境漂移悄悄污染一整批数据。
+
+**3. 24 次试验怎么保证可比？**
+
+每次试验之间必须整套仿真重启 —— 只有这样，Gazebo 的出生位姿和 AMCL 的初始位姿才回到同一个状态，起点才真的是同一个起点。手工点 24 次不可靠，所以写了 `scripts/run_batch.sh`：逐条启动、等待 Nav2 就绪、跑环境自检、发送目标、记录结果、关闭仿真、进入下一条；中断后重跑会自动跳过已完成的试验。
+
+统计口径也不含糊：被墙钟超时打断的记录不算"导航失败"，它根本没形成导航结果。判定规则写在 [实验记录](docs/experiment_logging.md) 里，避免把工具问题算成算法问题。
 
 ## 文档导航
 
