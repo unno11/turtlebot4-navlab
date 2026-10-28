@@ -82,6 +82,7 @@ wanted_goal() {
 # ---------------------------------------------------------------- state checks
 
 sim_running() { pgrep -f "gz sim" >/dev/null 2>&1; }
+launch_running() { pgrep -f "ros2 launch turtlebot4_gz_bringup" >/dev/null 2>&1; }
 
 already_done() {
   local gid="$1" t="$2" f
@@ -119,22 +120,30 @@ stop_sim() {
     kill -INT "-$pid" 2>/dev/null || kill -INT "$pid" 2>/dev/null
   fi
   pkill -INT -f "ros2 launch turtlebot4_gz_bringup" 2>/dev/null
+  # Waiting only for "gz sim" is not enough: the launch process can outlive its
+  # Gazebo and stay alive as an orphan, still holding node registrations. The next
+  # trial then starts a second launch against the same DDS graph and the two
+  # simulations fight over node names. One such orphan survived four hours during
+  # the controller matrix before it was noticed.
   deadline=$((SECONDS + STOP_TIMEOUT))
   while (( SECONDS < deadline )); do
-    sim_running || { sleep 2; return 0; }
+    sim_running || launch_running || { sleep 2; return 0; }
     sleep 2
   done
   log "  WARN: simulation still alive after ${STOP_TIMEOUT}s, escalating to TERM"
   pkill -TERM -f "gz sim" 2>/dev/null
   pkill -TERM -f "ros2 launch turtlebot4_gz_bringup" 2>/dev/null
   sleep 8
-  if sim_running; then
+  if sim_running || launch_running; then
     log "  WARN: escalating to KILL"
     pkill -KILL -f "gz sim" 2>/dev/null
     pkill -KILL -f "ros2 launch turtlebot4_gz_bringup" 2>/dev/null
     sleep 5
   fi
-  sim_running && { log "  ERROR: could not stop the simulation"; return 1; }
+  if sim_running || launch_running; then
+    log "  ERROR: could not stop the simulation"
+    return 1
+  fi
   return 0
 }
 
