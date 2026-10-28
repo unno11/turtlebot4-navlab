@@ -11,6 +11,14 @@ import time
 import unittest
 
 os.environ['ROS_DOMAIN_ID'] = '187'
+# multiprocessing has to spawn, not fork: the parent already carries DDS state from
+# earlier imports and forking it leaves the child hung before it can signal ready.
+# unittest discovery imports this module instead of running it as __main__, so this
+# cannot live in the __main__ guard.
+try:
+    mp.set_start_method('spawn')
+except RuntimeError:
+    pass
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import navigation_run
 import experiment_log as ledger
@@ -145,5 +153,4 @@ class ActionTests(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    mp.set_start_method('spawn')
     unittest.main()
