@@ -32,8 +32,9 @@ from pathlib import Path
 
 import yaml
 
+import run_record
+
 ROOT = Path(__file__).resolve().parent.parent
-STATUS_WORD = {4: "succeeded", 6: "failed"}
 
 
 def load_goals(path):
@@ -45,16 +46,12 @@ def load_goals(path):
 
 
 def classify(rec):
-    """Return (verdict, reason). verdict in {succeeded, failed, excluded}."""
-    if rec.get("state") != "finished":
-        return "excluded", "state=%s" % rec.get("state")
-    if rec.get("termination_reason") != "action_result":
-        return "excluded", str(rec.get("termination_reason") or "no_action_result")
-    status = rec.get("action_status")
-    word = STATUS_WORD.get(status)
-    if word is None:
-        return "excluded", "action_status=%s" % status
-    return word, ""
+    """Kept as a thin alias so the module's public surface does not change.
+
+    The actual rules live in run_record.py, shared with the batch runner - the two
+    used to disagree about what counts as a finished trial.
+    """
+    return run_record.verdict(rec)
 
 
 def span(values, fmt="%.1f"):
@@ -76,16 +73,18 @@ def main():
 
     per_goal = {gid: [] for gid in order}
     excluded = []
+    counted = []
     for path in sorted(Path(args.runs).glob("*/run.json")):
         rec = json.loads(path.read_text(encoding="utf-8"))
         gid = rec.get("goal_id")
         if gid not in per_goal:
             continue
         verdict, reason = classify(rec)
-        if verdict == "excluded":
+        if verdict not in run_record.SAFE_VERDICTS:
             excluded.append("%s t%s (%s)" % (gid, rec.get("trial"), reason))
             continue
         per_goal[gid].append((verdict, rec))
+        counted.append(rec)
 
     print("| 目标 | 类别 | 规划路径 | 试验 | 成功 | 成功率 | 导航耗时 s | 恢复次数 |")
     print("| --- | --- | --- | --- | --- | --- | --- | --- |")
@@ -123,6 +122,20 @@ def main():
     if excluded:
         print()
         print("未计入的本地记录（没有形成导航结果）：" + "、".join(excluded))
+
+    # Report the host-speed regime instead of silently ignoring it. The recorded
+    # batches ran below the pre-run gate in docs/experiment_logging.md; hiding that
+    # would make the numbers look cleaner than they are.
+    rtf = [r["nav_time_sim_s"] / r["duration_wall_s"] for r in counted
+           if isinstance(r.get("nav_time_sim_s"), (int, float))
+           and isinstance(r.get("duration_wall_s"), (int, float))
+           and r["duration_wall_s"]]
+    if rtf:
+        print()
+        print("rtf_estimate 范围 %.2f–%.2f（%d 条记录）。该值全部低于实验记录中 0.5 的"
+              "预跑门禁，门禁未满足的后果与不变的部分见 docs/experiment_logging.md。"
+              % (min(rtf), max(rtf), len(rtf)))
+
     return 0 if total_trials else 1
 
 

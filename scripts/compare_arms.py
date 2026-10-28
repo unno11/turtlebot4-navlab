@@ -19,18 +19,20 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from summarize_results import ROOT, classify, load_goals  # noqa: E402
+from summarize_results import ROOT, load_goals  # noqa: E402
+
+import run_record  # noqa: E402
 
 import json  # noqa: E402
 
 
 def load_arm(path):
-    """Return {goal_id: record} for the finished records in one arm."""
+    """Return {goal_id: record} for the records that hold a navigation result."""
     out = {}
     for f in sorted(Path(path).glob("*/run.json")):
         rec = json.loads(f.read_text(encoding="utf-8"))
-        verdict, _ = classify(rec)
-        if verdict == "excluded":
+        verdict, _ = run_record.verdict(rec)
+        if verdict not in run_record.SAFE_VERDICTS:
             continue
         out[rec.get("goal_id")] = (verdict, rec)
     return out

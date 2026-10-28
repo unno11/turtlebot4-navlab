@@ -86,11 +86,13 @@ sim_running() { pgrep -f "gz sim" >/dev/null 2>&1; }
 already_done() {
   local gid="$1" t="$2" f
   [[ "$SKIP_DONE" == "1" ]] || return 1
+  # A trial only counts as finished when the record holds a real navigation result
+  # from the same controller arm. Records where the harness gave up before the
+  # action returned are retried, and a record from another arm is a different trial:
+  # the controller is part of the experiment's identity.
   for f in results/runs/*_"${gid}"_t$(printf '%02d' "$t")_*/run.json; do
     [[ -e "$f" ]] || continue
-    if /usr/bin/python3 -c \
-        'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("state")=="finished" else 1)' \
-        "$f" 2>/dev/null; then
+    if /usr/bin/python3 scripts/run_record.py blocks-rerun "$f" "$CONTROL" 2>/dev/null; then
       return 0
     fi
   done
