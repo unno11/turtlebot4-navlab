@@ -37,3 +37,4 @@ __pycache__/
 
 # Batch runner logs are raw run data, same rule as runs/ and summary.csv.
 /results/batch_*.log
+/results/ctl_*.log

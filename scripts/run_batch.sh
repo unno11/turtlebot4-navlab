@@ -27,6 +27,10 @@
 #   TRIAL_TIMEOUT   wall-clock budget per navigation            (default 1800)
 #   STALE_TIMEOUT   sim clock / odom stall budget               (default 30)
 #   PLAN            1 = dry run, only print the schedule        (default 0)
+#   CONTROL         mppi | rpp | graceful, which local controller to run (default mppi)
+#                   The three parameter files differ only in the FollowPath block, so
+#                   the only variable between arms is the control law. The arm is
+#                   recorded in notes_start of every run.
 #
 # Exit code: 0 if every attempted trial ended with outcome=succeeded, 1 otherwise.
 
@@ -43,6 +47,7 @@ STOP_TIMEOUT="${STOP_TIMEOUT:-60}"
 TRIAL_TIMEOUT="${TRIAL_TIMEOUT:-1800}"
 STALE_TIMEOUT="${STALE_TIMEOUT:-30}"
 PLAN="${PLAN:-0}"
+CONTROL="${CONTROL:-mppi}"
 
 BATCH_LOG="results/batch_$(date +%Y%m%d_%H%M%S).log"
 NODES="amcl bt_navigator controller_server planner_server collision_monitor velocity_smoother"
@@ -143,6 +148,7 @@ if [[ "$PLAN" != "1" ]]; then
   [[ -x scripts/check_paths.py ]] || chmod +x scripts/check_paths.py 2>/dev/null
   mkdir -p results
   log "batch log: $BATCH_LOG"
+  log "local controller arm: $CONTROL"
 fi
 
 schedule=()
@@ -202,7 +208,7 @@ for row in "${schedule[@]}"; do
   sim_running && die "simulation still running before $gid t$t -- refusing to start a second one"
 
   # Batch runs are headless: RViz is a pure subscriber and only costs CPU here.
-  setsid env RVIZ="${RVIZ:-false}" bash ./scripts/start_navigation.sh >/dev/null 2>&1 &
+  setsid env RVIZ="${RVIZ:-false}" CONTROL="$CONTROL" bash ./scripts/start_navigation.sh >/dev/null 2>&1 &
   launch_pid=$!
   log "  launch started (pgid $launch_pid)"
 
@@ -227,6 +233,7 @@ for row in "${schedule[@]}"; do
   /usr/bin/python3 scripts/experiment_log.py navigate \
     --goal-id "$gid" --trial "$t" \
     --x "$x" --y "$y" --yaw "$yaw" \
+    --notes "control=$CONTROL" \
     --timeout "$TRIAL_TIMEOUT" --stale-timeout "$STALE_TIMEOUT" \
     >/dev/null 2>&1
   rc=$?

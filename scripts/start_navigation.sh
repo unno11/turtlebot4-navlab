@@ -51,6 +51,18 @@ if [[ ! -f "$LOCALIZATION_PARAMS" ]]; then
   echo "错误：缺少 $LOCALIZATION_PARAMS（固定起点 S0 的 AMCL 初始位姿）。" >&2
   exit 1
 fi
+# Which local controller to run. The three parameter files are identical apart from
+# the controller_server FollowPath block, so switching arms changes the control law
+# and nothing else:
+#   CONTROL=mppi      nav2_mppi_controller::MPPIController            (upstream default)
+#   CONTROL=rpp       nav2_regulated_pure_pursuit_controller
+#   CONTROL=graceful  nav2_graceful_controller
+CONTROL="${CONTROL:-mppi}"
+NAV2_PARAMS="$REPO_ROOT/config/nav2_${CONTROL}.yaml"
+if [[ ! -f "$NAV2_PARAMS" ]]; then
+  echo "错误：CONTROL 只能取 mppi / rpp / graceful，未找到 $NAV2_PARAMS" >&2
+  exit 1
+fi
 # RViz is a pure subscriber: it does not change navigation behaviour, sensing or any
 # recorded metric, but it costs a large share of the simulation real-time factor on
 # this machine. Keep it on while debugging, off for experiment runs:
@@ -63,6 +75,7 @@ fi
 
 echo "启动 Gazebo + Nav2 + AMCL（world=warehouse）"
 echo "固定起点 S0: map(0.000, 0.000, yaw=0.000) <- config/localization.yaml"
+echo "局部控制器: $CONTROL ($(basename -- "$NAV2_PARAMS"))"
 echo "RViz: $RVIZ"
 echo "日志: $LOG_FILE"
 echo '按 Ctrl+C 可请求停止整套 launch。'
@@ -82,4 +95,5 @@ ros2 launch turtlebot4_gz_bringup turtlebot4_gz.launch.py \
   visualize_rays:=false \
   x:=0.0 y:=0.0 z:=0.0 yaw:=0.0 \
   params:="$LOCALIZATION_PARAMS" \
+  params_file:="$NAV2_PARAMS" \
   2>&1 | tee "$LOG_FILE"
