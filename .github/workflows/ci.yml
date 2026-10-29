@@ -28,6 +28,11 @@ jobs:
           done
           python3 -m py_compile scripts/*.py
 
+      - name: Repository self-check
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          python3 scripts/audit_repo.py -v
+
       - name: Unit tests
         run: |
           source /opt/ros/jazzy/setup.bash

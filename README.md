@@ -31,6 +31,7 @@ cd ~/turtlebot4_ws/src/turtlebot4-navlab
 ./scripts/start_navigation.sh                    # Gazebo + Nav2 + AMCL，起点自动固定为 S0
 TRIALS=3 ./scripts/run_batch.sh                  # 8 个目标 x 3 次，逐个重启、自检、记录
 /usr/bin/python3 scripts/summarize_results.py    # 生成结果表
+/usr/bin/python3 scripts/audit_repo.py           # 仓库自检：链接、配置、文档引用是否与代码一致
 ```
 
 环境要求见 [复现与启动指南](docs/reproduction.md)。起点由 `config/localization.yaml` 固定，无需使用 RViz 的 2D Pose Estimate。
