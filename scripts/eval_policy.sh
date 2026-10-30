@@ -9,9 +9,10 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
-WEIGHTS="${1:?usage: eval_policy.sh <weights.npz> <goal-id> <out.json>}"
+WEIGHTS="${1:?usage: eval_policy.sh <weights.npz> <goal-id> <out.json> [timeout_sim_s]}"
 GOAL_ID="${2:?goal id, e.g. G02}"
 OUT="${3:?output json path}"
+TIMEOUT="${4:-600}"
 
 LOG_DIR="$HOME/turtlebot4_ws/log/navlab"
 mkdir -p "$LOG_DIR" "$(dirname "$OUT")"
@@ -67,7 +68,7 @@ sleep 3
 
 /usr/bin/python3 scripts/eval_policy.py \
   --goal-id "$GOAL_ID" --x "$X" --y "$Y" --yaw "$YAW" \
-  --weights "$WEIGHTS" --out "$OUT" --timeout 600
+  --weights "$WEIGHTS" --out "$OUT" --timeout "$TIMEOUT"
 RC=$?
 log "eval finished (rc=$RC) -> $OUT"
 exit $RC
