@@ -90,6 +90,7 @@ TRIALS=3 ./scripts/run_batch.sh                  # 8 个目标 x 3 次，逐个�
 | [目标集与难度定义](docs/goal_set.md) | 8 个导航目标、难度判据与复核方法 |
 | [官方基线结果](docs/baseline.md) | 基线条件、结果表、指标口径与复跑方式 |
 | [局部控制器对比](docs/controller_comparison.md) | MPPI / RPP / Graceful 在同一批目标上的对比与结论 |
+| [模仿学习基线](docs/imitation_learning.md) | 行为克隆替换局部控制器：采集、训练、闭环失败分析（进行中） |
 | [实验记录](docs/experiment_logging.md) | 自动记录流程、结果分类规则、仿真速度门禁 |
 | [结果目录](results/README.md) | 输出位置、字段含义与本地数据管理 |
 | [环境排障](docs/troubleshooting.md) | 图形、雷达、TF、控制器或构建问题 |
