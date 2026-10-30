@@ -73,7 +73,7 @@ class Collector(Node):
         q = tf.transform.rotation
         yaw = np.arctan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
         goal = self.path_xy[-1]
-        obs = build_obs(self.ranges, self.path_xy, (t.x, t.y), yaw, goal, self.w_prev)
+        obs = build_obs(self.ranges, self.path_xy, (t.x, t.y), yaw, goal)
         self.obs.append(obs)
         self.act.append(np.array([self.last_v, self.w_prev], dtype=np.float32))
 

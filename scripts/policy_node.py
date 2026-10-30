@@ -70,7 +70,7 @@ class PolicyController(Node):
             self.stop()
             return
         age = (self.get_clock().now() - self.last_plan_time).nanoseconds / 1e9
-        if age > 3.0:  # plan went stale: stop rather than drive blind
+        if age > 4.5:  # plan went stale: stop rather than drive blind
             self.stop()
             return
         try:
@@ -81,7 +81,7 @@ class PolicyController(Node):
         t = tf.transform.translation
         q = tf.transform.rotation
         yaw = np.arctan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
-        obs = build_obs(self.ranges, self.path_xy, (t.x, t.y), yaw, self.path_xy[-1], self.w_prev)
+        obs = build_obs(self.ranges, self.path_xy, (t.x, t.y), yaw, self.path_xy[-1])
         v, w = self.policy(obs)
         v = max(-self.max_speed, min(self.max_speed, v))
         if self.dump_path and len(self.dumped) < 300:

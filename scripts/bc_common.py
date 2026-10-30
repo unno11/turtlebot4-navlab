@@ -9,12 +9,17 @@ import numpy as np
 
 # Observation layout (do not reorder without retraining):
 #   [0:N_BINS]      laser ranges, min-pooled, clipped, normalised
-#   [-4]            lookahead point, x in base_link
-#   [-3]            lookahead point, y in base_link
-#   [-2]            distance to goal, metres
-#   [-1]            last commanded yaw rate
+#   [-3]            lookahead point, x in base_link
+#   [-2]            lookahead point, y in base_link
+#   [-1]            distance to goal, metres
+#
+# The previous angular velocity used to be the last feature. It is deliberately
+# gone: the label's angular velocity came from the same cmd_vel message, so the
+# network could satisfy that target by copying its input, and in closed loop the
+# copy fed itself back and froze the yaw rate at its initial value. Version 1
+# demonstrations (66 columns) are migrated in train_bc.py.
 N_BINS = 60
-OBS_DIM = N_BINS + 4
+OBS_DIM = N_BINS + 3
 ACT_DIM = 2
 RANGE_MAX = 6.0
 LOOKAHEAD = 0.7
@@ -66,8 +71,8 @@ def to_base_frame(point_xy, robot_xy, yaw):
     return c * dx + s * dy, -s * dx + c * dy
 
 
-def build_obs(ranges, path_xy, robot_xy, yaw, goal_xy, w_prev):
-    """Assemble one observation vector. Returns obs and a bool for validity."""
+def build_obs(ranges, path_xy, robot_xy, yaw, goal_xy):
+    """Assemble one observation vector."""
     scan = bin_scan(ranges)
     point, remaining = lookahead_point(path_xy, robot_xy)
     if point is None:
@@ -77,7 +82,7 @@ def build_obs(ranges, path_xy, robot_xy, yaw, goal_xy, w_prev):
         lx = float(np.clip(lx, -5.0, 5.0))
         ly = float(np.clip(ly, -5.0, 5.0))
     d_goal = float(np.linalg.norm(np.asarray(goal_xy, dtype=np.float64) - np.asarray(robot_xy, dtype=np.float64)))
-    obs = np.concatenate([scan, np.array([lx, ly, min(d_goal, 60.0), w_prev], dtype=np.float32)])
+    obs = np.concatenate([scan, np.array([lx, ly, min(d_goal, 60.0)], dtype=np.float32)])
     return obs.astype(np.float32)
 
 

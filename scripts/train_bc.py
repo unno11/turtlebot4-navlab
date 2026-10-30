@@ -17,6 +17,11 @@ import numpy as np
 import torch
 from torch import nn
 
+import os as _os
+import sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from bc_common import OBS_DIM  # noqa: E402
+
 
 def load_demos(demo_dir, val_frac, include=None):
     files = sorted(glob.glob(os.path.join(demo_dir, "*.npz")))
@@ -26,9 +31,16 @@ def load_demos(demo_dir, val_frac, include=None):
     if not files:
         raise SystemExit(f"no demonstrations under {demo_dir}" + (f" matching {include}" if include else ""))
     tr_obs, tr_act, va_obs, va_act, report = [], [], [], [], []
+    migrated = 0
     for f in files:
         d = np.load(f)
         obs, act = d["obs"], d["act"]
+        if obs.shape[1] > OBS_DIM:
+            # Version 1 demonstrations carry the previous angular velocity as the
+            # last column, which made the yaw-rate target trivially copyable.
+            # Truncating keeps scan + lookahead + goal distance in place.
+            obs = obs[:, :OBS_DIM]
+            migrated += 1
         n = len(obs)
         cut = max(1, int(n * (1.0 - val_frac)))
         if n < 50:
@@ -41,6 +53,8 @@ def load_demos(demo_dir, val_frac, include=None):
         report.append({"file": os.path.basename(f), "samples": n, "train": cut, "val": n - cut, "used": True})
     if not tr_obs:
         raise SystemExit("every demonstration was too short to use")
+    if migrated:
+        print(f"migrated {migrated} demonstration(s) from the 66-column layout")
     return (np.concatenate(tr_obs), np.concatenate(tr_act),
             np.concatenate(va_obs), np.concatenate(va_act), report)
 

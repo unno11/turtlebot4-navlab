@@ -42,6 +42,8 @@ class PolicyEval(Node):
         self.replans = 0
         self.plan_pending = False
         self.result = None
+        self.next_replan = 0.0
+        self.last_dist = None
         self.create_timer(0.5, self.on_tick)
 
     # ------------------------------------------------------------------ helpers
@@ -100,14 +102,16 @@ class PolicyEval(Node):
                 self.traveled += float(np.hypot(p[0] - self.last_pos[0], p[1] - self.last_pos[1]))
             self.last_pos = p
             dist = float(np.hypot(p[0] - self.goal[0], p[1] - self.goal[1]))
+            self.last_dist = dist
             if dist < 0.25:
                 self.finish(True, elapsed, dist)
                 return
         if elapsed > self.args.timeout:
-            self.finish(False, elapsed, None)
+            self.finish(False, elapsed, self.last_dist)
             return
-        if self.replans == 0 or elapsed % self.args.replan_every < 0.5:
+        if elapsed >= self.next_replan:
             self.request_plan()
+            self.next_replan = elapsed + self.args.replan_every
 
     def finish(self, ok, elapsed, dist):
         self.result = {
@@ -135,7 +139,7 @@ def main():
     ap.add_argument("--y", type=float, required=True)
     ap.add_argument("--yaw", type=float, default=0.0)
     ap.add_argument("--timeout", type=float, default=600.0, help="simulation seconds")
-    ap.add_argument("--replan-every", type=float, default=3.0)
+    ap.add_argument("--replan-every", type=float, default=2.0)
     ap.add_argument("--weights", default="results/policy/bc_policy.npz")
     ap.add_argument("--out", default="results/policy_eval/run.json")
     args = ap.parse_args()
